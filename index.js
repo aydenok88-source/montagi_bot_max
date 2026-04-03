@@ -1,38 +1,50 @@
-const { Bot } = require('@maxhub/max-bot-api');
+import { Bot } from '@maxhub/max-bot-api';
 
-const bot = new Bot(process.env.BOT_TOKEN);
+const BOT_TOKEN = process.env.BOT_TOKEN;
+const TARGET_CHAT_ID = parseInt(process.env.TARGET_CHAT_ID);
 
-// ========== СЮДА ВСТАВЬТЕ ВАШ ID ИЗ ШАГА 2 ==========
-const TARGET_CHAT_ID = -72955283925194;  // ЗАМЕНИТЕ НА ВАШЕ ЧИСЛО
-// ====================================================
+const bot = new Bot(BOT_TOKEN);
 
-// Функция для получения имени
-function getName(sender) {
-    if (!sender) return 'Неизвестный';
-    if (sender.first_name) return sender.first_name;
-    if (sender.username) return '@' + sender.username;
-    return 'Пользователь';
-}
-
-bot.command('start', (ctx) => {
-    ctx.reply('✅ Бот работает! Отправьте мне сообщение в личку.');
+bot.command('start', async (ctx) => {
+    await ctx.reply('✅ Бот работает! Я пересылаю сообщения.');
+    console.log('Получена команда /start');
 });
 
-bot.on('message', async (ctx) => {
-    // Пропускаем команды
-    if (ctx.message.text && ctx.message.text.startsWith('/')) return;
+bot.on('message_created', async (ctx) => {
+    const message = ctx.message;
     
-    const senderName = getName(ctx.message.sender);
-    const messageText = ctx.message.text || '';
-    const forwardText = `📨 Отправитель: ${senderName}\n📝 Текст: ${messageText}`;
+    // Игнорируем сообщения от самого бота
+    if (message.sender && message.sender.is_bot) {
+        return;
+    }
+    
+    const text = message.body?.text;
+    const senderName = message.sender?.first_name || 'Пользователь';
+    
+    console.log(`Получено от ${senderName}: ${text || '[вложение]'}`);
     
     try {
-        await bot.api.sendMessageToChat(TARGET_CHAT_ID, forwardText);
-        console.log(`✅ Переслано: ${forwardText}`);
-    } catch (err) {
-        console.log('❌ Ошибка:', err.message);
+        if (text) {
+            await bot.api.sendMessageToChat(
+                TARGET_CHAT_ID, 
+                `📨 Переслано от ${senderName}:\n\n${text}`
+            );
+        }
+        
+        // Пересылка вложений (фото, видео, файлы)
+        if (message.body?.attachments && message.body.attachments.length > 0) {
+            for (const attachment of message.body.attachments) {
+                await bot.api.sendMessageToChat(
+                    TARGET_CHAT_ID,
+                    `📎 Вложение от ${senderName}`,
+                    { attachments: [attachment] }
+                );
+            }
+        }
+    } catch (error) {
+        console.error('Ошибка при пересылке:', error);
     }
 });
 
 bot.start();
-console.log('🤖 Бот запущен. Напишите ему любое сообщение.');
+console.log('🚀 Бот запущен и слушает сообщения...');
